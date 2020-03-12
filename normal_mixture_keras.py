@@ -9,10 +9,15 @@
 # Google Colab version here:
 # https://colab.research.google.com/drive/1dSW7Yn8okef-ng-Inkev205L2Gy6_MIx
 
+# 12/03/2020: Added switches for BiGAN and Vanilla GAN for comparison
+
 # Imports
 
 import matplotlib as mpl
-# mpl.use('Agg')
+mpl.use('Agg')
+# mpl.rcParams['font.family'] = 'serif'
+# mpl.rcParams['font.serif'] = ['cmr10']
+# mpl.font_manager.findfont('cmmr')
 import tensorflow as tf
 import tensorflow.keras as tfk
 import tensorflow_probability as tfp
@@ -23,13 +28,24 @@ from tqdm import tqdm
 
 ds = tfp.distributions
 
+use_veegan = True
+use_bigan = False
+use_vanillagan = False
+
 # Parameters
 
+# Note: potentially confusing; what VEEGAN calls "latent" is actually
+# the data space, and the "latent" space is "input_dim".  I kept this
+# from the VEEGAN example code but it's a bit weird, I believe it's
+# because they consider the structure of the GAN as an autoencoder
+# from input x to p(x|z), where the latent space of that autoencoder,
+# q(z|x), would be the data; this is the reverse of a BiGAN which
+# would decode data p(x|z) from input z and infer q(z|x) from p(x).
 params = {
     'batch_size': 500,
-    'latent_dim': 2, 
+    'latent_dim': 2, # actually data dims!
     'eps_dim': 1, 
-    'input_dim': 254,
+    'input_dim': 50, # actually latent dims!
     'n_layer_disc': 2,
     'n_hidden_disc': 128,
     'n_layer_gen': 2,
@@ -38,6 +54,10 @@ params = {
     'n_hidden_inf': 128,
     'learning_rate': 1e-3,
 }
+
+if use_veegan: method = 'VEEGAN'
+elif use_bigan: method = 'BiGAN'
+elif use_vanillagan: method = 'Vanilla GAN'
 
 # Generate 2D grid
 
@@ -66,10 +86,13 @@ def generative_network(batch_size, latent_dim, input_dim, n_layer,
     h = tfk.layers.Dense(n_hidden, activation='relu')(z)
     h = tfk.layers.Dense(n_hidden, activation='relu')(h)
     p = tfk.layers.Dense(input_dim)(h)
+    h = tfk.layers.Dense(n_hidden, activation='relu')(z)
+    h = tfk.layers.Dense(n_hidden, activation='relu')(h)
+    s = tfk.layers.Dense(input_dim, activation='softplus')(h)
     x = tfp.layers.DistributionLambda(
-        lambda x: tfp.distributions.Normal(loc=x, scale=1),
+        lambda x: tfp.distributions.Normal(loc=x[0], scale=x[1]),
         lambda x: x.sample(),
-        name="p_x")(p)
+        name="p_x")([p,s])
     return tfk.Model(z,x)
 
 def inference_network(input_dim, latent_dim, n_layer, n_hidden, eps_dim):
@@ -84,7 +107,10 @@ def inference_network(input_dim, latent_dim, n_layer, n_hidden, eps_dim):
 def data_network(input_dim, latent_dim, n_layers=2, n_hidden=128, activation_fn=None):
     x = tfk.layers.Input(input_dim)
     z = tfk.layers.Input(latent_dim)
-    h = tfk.layers.Concatenate()([x,z])
+    if use_vanillagan:
+        h = z
+    else:
+        h = tfk.layers.Concatenate()([x,z])
     h = tfk.layers.Dense(n_hidden, activation='relu')(h)
     log_d = tfk.layers.Dense(1, activation=activation_fn)(h)
     return tfk.Model([x,z], log_d)
@@ -112,41 +138,55 @@ p_x = tfk.Model(p_z, p_model(p_z))
 q_z = tfk.Model([x,eps], q_model([x,eps]))
 log_d = tfk.Model([x, eps, p_z], [log_d_model([p_x(p_z), p_z]),        # prior
                                   log_d_model([x, q_z([x,eps])])])     # posterior
-log_d_posterior = tfk.Model([x, eps], [log_d_model([x, q_z([x,eps])]), # posterior
-                                       p_x(q_z([x,eps])).log_prob(x)])
+if use_veegan or use_vanillagan:
+    log_d_posterior = tfk.Model([x, eps, p_z], [log_d_model([x, q_z([x,eps])]),
+                                                p_x(q_z([x,eps])).log_prob(x)])
+elif use_bigan:
+    log_d_posterior = tfk.Model([x, eps, p_z], [log_d_model([x, q_z([x,eps])]),
+                                                log_d_model([p_x(p_z), p_z])])
 
 # Compile: define optimizers and losses
 for l in log_d_model.layers: l.trainable=True
 for l in q_model.layers: l.trainable=False
 for l in p_model.layers: l.trainable=False
 opt = tfk.optimizers.Adam(learning_rate=params['learning_rate'], beta_1=0.5)
-log_d.compile(opt, [lambda t,p: tf.nn.sigmoid_cross_entropy_with_logits(t,p)]*2)
+log_d.compile(opt, [tf.nn.sigmoid_cross_entropy_with_logits]*2)
 
 def log_d_posterior_loss(true, pred):
     return tf.reduce_mean(pred)
 def recon_likelihood(true, pred):
-    return -tf.reduce_mean(tf.reduce_sum(pred,axis=1))
+    return -tf.reduce_mean(tf.reduce_sum(pred,axis=1))*(1-use_vanillagan)
 for l in log_d_model.layers: l.trainable=False
 for l in q_model.layers: l.trainable=True
 for l in p_model.layers: l.trainable=True
-log_d_posterior.compile(opt, [log_d_posterior_loss, recon_likelihood])
+if use_veegan or use_vanillagan:
+    log_d_posterior.compile(opt, [log_d_posterior_loss, recon_likelihood])
+elif use_bigan:
+    log_d_posterior.compile(opt, [tf.nn.sigmoid_cross_entropy_with_logits]*2)
 
 ones = np.ones((params['batch_size'],1))
 zeros = np.zeros((params['batch_size'],1))
 
 # Visualization
 
-fig, ax = plt.subplots(1,1, num=1)
+fig, (ax,ax2) = plt.subplots(1,2, num=1, figsize=(8,4))
 lims = None
 frame = 0
 z_input_viz = normal_mixture([500, params['latent_dim']])
 x_input_viz = tf.random.normal([500, params['input_dim']])
 eps_input_viz = tf.random.normal([500, params['eps_dim']])
-z_scat = ax.scatter([0],[0])
-qz_scat = ax.scatter([0],[0])
+z_scat = ax.scatter([0],[0], label='target')
+qz_scat = ax.scatter([0],[0], label='generated')
 def viz(epoch):
     global frame, lims
+    z_input_viz = normal_mixture([500, params['latent_dim']])
+    x_input_viz = tf.random.normal([500, params['input_dim']])
+    eps_input_viz = tf.random.normal([500, params['eps_dim']])
+    mus = np.array([np.array([i, j]) for i, j in product(range(-4, 5, 2),
+                                                         range(-4, 5, 2))],
+                   dtype=np.float32)
     x_output = q_z.predict([x_input_viz, eps_input_viz])
+    z_output = p_x.predict(z_input_viz)
     xl_ = np.array([np.minimum(np.min(z_input_viz[:,0]), np.min(x_output[:,0])),
                     np.maximum(np.max(z_input_viz[:,0]), np.max(x_output[:,0]))])
     yl_ = np.array([np.minimum(np.min(z_input_viz[:,1]), np.min(x_output[:,1])),
@@ -161,18 +201,37 @@ def viz(epoch):
     ax.set_xlim(lims[:2]); ax.set_ylim(lims[2:4])
     z_scat.set_offsets(z_input_viz)
     qz_scat.set_offsets(x_output)
-    fig.suptitle(f'VEEGAN: Epoch {epoch}')
-    fig.canvas.draw()
-    plt.pause(0.0001)
-    # fig.savefig('now.png')
-    # fig.savefig(f'frames/frame{frame:06d}.png')
+    f = ax.set_title('data', fontname='cmr10')
+    ax.legend(loc=1, prop=f.get_fontproperties())
+    ax2.clear()
+    # ax2.scatter(x_input_viz[:,0], x_input_viz[:,1])
+    for m in mus:
+        z_input_viz = np.hstack([tf.random.normal([50, 1], mean=m[0], stddev=0.05),
+                                 tf.random.normal([50, 1], mean=m[1], stddev=0.05)])
+        z_output = p_x.predict(z_input_viz)
+        ax2.scatter(z_output[:,0], z_output[:,1])
+    ax2.plot(np.cos(np.linspace(0,2*np.pi,200))*1.96,
+             np.sin(np.linspace(0,2*np.pi,200))*1.96, 'k--', label='target space')
+    ax2.set_xlim(-3,3)
+    ax2.set_ylim(-3,3)
+    if params['input_dim']==2:
+        ax2.set_title('input / inferred', fontname='cmr10')
+    else:
+        ax2.set_title('input / inferred (first 2 dims)', fontname='cmr10')
+    ax2.legend(loc=1, prop=f.get_fontproperties())
+    # ax2.plot([-1,1,1,-1,-1], [-1,-1,1,1,-1], 'k--')
+    fig.suptitle(f'{params["input_dim"]}D {method}: Epoch {epoch}', fontname='cmr10')
+    # fig.canvas.draw()
+    # plt.pause(0.0001)
+    fig.savefig('now.png')
+    fig.savefig(f'frames/frame{frame:06d}.png')
     frame += 1
 
 # Training
 
-with tqdm(range(100),total=100) as tq:
+with tqdm(range(200),total=200) as tq:
     for i in tq:
-        for j in range(1000):
+        for j in range(100):
             x_input = tf.random.normal([params['batch_size'], params['input_dim']])
             z_input = normal_mixture([params['batch_size'], params['latent_dim']])
             eps_input = tf.random.normal([params['batch_size'], params['eps_dim']])
@@ -182,9 +241,10 @@ with tqdm(range(100),total=100) as tq:
             log_d.train_on_batch([x_input,eps_input,z_input], [zeros, ones])
 
             x_input = tf.random.normal([params['batch_size'], params['input_dim']])
+            z_input = normal_mixture([params['batch_size'], params['latent_dim']])
             eps_input = tf.random.normal([params['batch_size'], params['eps_dim']])
             for l in log_d_model.layers: l.trainable=False
             for l in q_model.layers: l.trainable=True
             for l in p_model.layers: l.trainable=True
-            log_d_posterior.train_on_batch([x_input,eps_input], [zeros, zeros])
+            log_d_posterior.train_on_batch([x_input,eps_input,z_input], [zeros, ones])
         viz(i)
