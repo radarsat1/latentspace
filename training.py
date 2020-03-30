@@ -1,19 +1,7 @@
 # Training framework for bidrectional GAN problems
 
-import matplotlib as mpl
-mpl.use('Agg')
-# mpl.rcParams['font.family'] = 'serif'
-# mpl.rcParams['font.serif'] = ['cmr10']
-# mpl.font_manager.findfont('cmmr')
-
-import tensorflow as tf
-import tensorflow.keras as tfk
-import numpy as np
-from tqdm import tqdm
+# First deal wtih parameters
 import sys, os
-
-from datasets import get_dataset
-from models import get_model
 
 # Dataset parameters
 dataset_params = {
@@ -51,6 +39,37 @@ training_params = {
     'learning_rate_target': 1e-5,
     'discriminator_ratio': 1,
 }
+
+# Override parameters on command-line
+all_params = {'dataset': dataset_params,
+              'model': model_params,
+              'training': training_params}
+for i in range(1,len(sys.argv)):
+    arg = sys.argv[i].split('=')
+    p = all_params
+    for a in arg[0].split('.'):
+        parm = p
+        p = p[a]
+    if isinstance(parm[a],str):     parm[a] = arg[1]
+    elif isinstance(parm[a],float): parm[a] = float(arg[1])
+    elif isinstance(parm[a],int):   parm[a] = int(arg[1])
+    else: assert False and 'Unknown parameter type.'
+
+# Start of program
+
+import matplotlib as mpl
+mpl.use('Agg')
+# mpl.rcParams['font.family'] = 'serif'
+# mpl.rcParams['font.serif'] = ['cmr10']
+# mpl.font_manager.findfont('cmmr')
+
+import tensorflow as tf
+import tensorflow.keras as tfk
+import numpy as np
+from tqdm import tqdm
+
+from datasets import get_dataset
+from models import get_model
 
 # Get dataset and model
 
@@ -156,6 +175,8 @@ eps_input_gen = eps_input_generator()
 method = {'veegan':'VEEGAN', 'bigan':'BiGAN', 'vanilla':'Vanilla GAN'}\
          [model_params['type']]
 variant = model_params['variant'].upper()
+if 'GP' in variant:
+    variant += f' ($\\lambda=${model_params["gp_weight"]:0.2g})'
 
 dirname = f'frames-{method}{dataset_params["data_dim"]}D-{variant}'
 normgen = {'batch':'B','layer':'L'}.get(model_params['normalization']['gen'],'0')
