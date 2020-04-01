@@ -7,7 +7,7 @@ import tensorflow.keras as tfk
 class GradientPenalty(tfk.layers.Layer):
     def __init__(self, params, critic):
         self.variant = params['variant']
-        self.weight = params['gp_weight']
+        self.weight = [0.0,params['gp_weight']]['gp' in params['variant']]
         self.critic = critic
         super(GradientPenalty, self).__init__()
     def call(self, x1, x2):
