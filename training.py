@@ -15,7 +15,7 @@ dataset_params = {
 model_params = {
     'name': 'dense',
     'type': ['veegan','bigan','vanilla'][1],
-    'loss': ['sigmoid','wgan','began'][0],
+    'loss': ['sigmoid','wgan','began'][1],
     'variant': ['sn','0gp','1gp'][1],
     'gp_weight': 0.01,
     'normalization': {'gen':'batch', 'critic':None},
@@ -36,8 +36,8 @@ training_params = {
     'epochs': 5000,
     'epoch_size': 100,
     'learning_rate': 1e-3,
-    'learning_rate_target': 1e-5,
-    'discriminator_ratio': 1,
+    'learning_rate_target': 1e-4,
+    'critic_ratio': 1,
 }
 
 # Override parameters on command-line
@@ -194,7 +194,7 @@ with tqdm(range(training_params['epochs']),
             for l in critic.layers: l.trainable=True
             for l in encoder.layers: l.trainable=False
             for l in decoder.layers: l.trainable=False
-            for k in range(training_params['discriminator_ratio']):
+            for k in range(training_params['critic_ratio']):
                 x_input = next(x_input_gen)
                 z_input = next(z_input_gen)
                 eps_input = next(eps_input_gen)
