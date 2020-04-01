@@ -147,7 +147,7 @@ class Dataset(object):
         else:
             self.ax2.set_title('encoded (first 2 dims)', fontname='cmr10')
         self.fig.suptitle(
-            f'{self.z_input_viz.shape[1]}D {self.method} {self.variant}: Epoch {epoch}',
+            f'{self.z_input_viz.shape[1]}D {self.method} {self.variant} — Epoch {epoch}',
             fontname='cmr10')
         # fig.canvas.draw()
         # plt.pause(0.0001)

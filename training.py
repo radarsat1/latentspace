@@ -2,6 +2,7 @@
 
 # First deal wtih parameters
 import sys, os
+from pprint import pprint
 
 # Dataset parameters
 dataset_params = {
@@ -179,22 +180,33 @@ eps_input_gen = eps_input_generator()
 
 method = {'veegan':'VEEGAN', 'bigan':'BiGAN', 'vanilla':'Vanilla GAN'}\
          [model_params['type']]
-variant = model_params['variant'].upper()
+variant = {'none':'','sn':'SN','0gp':'0GP','1gp':'1GP'}[model_params['variant']]
+variantfn = variant
 if 'GP' in variant:
+    variantfn = variant+f'-{model_params["gp_weight"]:0.2g}'
     variant += f' ($\\lambda=${model_params["gp_weight"]:0.2g})'
+if training_params['critic_ratio'] > 1:
+    variantfn += f'-{training_params["critic_ratio"]}:1'
+    variant += f' {training_params["critic_ratio"]}:1'
 
-dirname = f'frames-{method}{dataset_params["data_dim"]}D-{variant}'
+dirname = f'frames-{method}{dataset_params["data_dim"]}D-{variantfn}'
 normgen = {'batch':'B','layer':'L'}.get(model_params['normalization']['gen'],'0')
 normcritic = {'batch':'B','layer':'L'}.get(model_params['normalization']['critic'],'0')
-dirname += f'-{normgen}{normcritic}{training_params["discriminator_ratio"]}'
+norm = normgen+normcritic
+if norm != '00':
+    variant += ' ' + norm
+dirname += f'-{norm}{training_params["critic_ratio"]}'
 
 ds.init_viz(dirname, method, variant,
             next(x_input_gen), next(z_input_gen), next(eps_input_gen))
+ds.viz(0, decoder, encoder)
+
+pprint(all_params)
+print('output dir:',dirname)
 
 with tqdm(range(training_params['epochs']),
           total=training_params['epochs']) as tq:
     for i in tq:
-        ds.viz(i, decoder, encoder)
         for j in range(training_params['epoch_size']):
             for l in critic.layers: l.trainable=True
             for l in encoder.layers: l.trainable=False
@@ -219,4 +231,4 @@ with tqdm(range(training_params['epochs']),
             data_model.optimizer.learning_rate.assign(learning_rate)
             gen_model.optimizer.learning_rate.assign(learning_rate)
             tq.set_postfix({'lr': learning_rate})
-    ds.viz(i+1, decoder, encoder)
+        ds.viz(i+1, decoder, encoder)
