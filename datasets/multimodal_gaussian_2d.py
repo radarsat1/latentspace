@@ -105,7 +105,6 @@ class Dataset(object):
         tf.random.set_seed(2)
         N = self.x_input_viz.shape[1]
         D = self.x_input_viz.shape[2]
-        z_output = encoder.predict(tf.reshape(self.x_input_viz,(len(mus)*N,D)))
         x_output = decoder.predict([self.z_input_viz,self.eps_input_viz])
         xl_ = np.array([np.minimum(np.min(self.x_input_viz[:,:,0]),np.min(x_output[:,0])),
                         np.maximum(np.max(self.x_input_viz[:,:,0]),np.max(x_output[:,0]))])
