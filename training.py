@@ -44,16 +44,21 @@ training_params = {
 all_params = {'dataset': dataset_params,
               'model': model_params,
               'training': training_params}
-for i in range(1,len(sys.argv)):
-    arg = sys.argv[i].split('=')
-    p = all_params
-    for a in arg[0].split('.'):
-        parm = p
-        p = p[a]
-    if isinstance(parm[a],str):     parm[a] = arg[1]
-    elif isinstance(parm[a],float): parm[a] = float(arg[1])
-    elif isinstance(parm[a],int):   parm[a] = int(arg[1])
-    else: assert False and 'Unknown parameter type.'
+try:
+    for i in range(1,len(sys.argv)):
+        arg = sys.argv[i].split('=')
+        p = all_params
+        for a in arg[0].split('.'):
+            parm = p
+            p = p[a]
+        if isinstance(parm[a],str):     parm[a] = arg[1]
+        elif parm[a] is None:           parm[a] = arg[1]
+        elif isinstance(parm[a],float): parm[a] = float(arg[1])
+        elif isinstance(parm[a],int):   parm[a] = int(arg[1])
+        else: assert False and 'Unknown parameter type.'
+except KeyError as e:
+    print(f'Unknown field {e} in {sys.argv[i]}')
+    exit(1)
 
 # Start of program
 
