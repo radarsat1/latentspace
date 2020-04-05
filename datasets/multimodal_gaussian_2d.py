@@ -12,14 +12,11 @@ mpl.use('Agg')
 # mpl.rcParams['font.serif'] = ['cmr10']
 # mpl.font_manager.findfont('cmmr')
 import tensorflow as tf
-import tensorflow.keras as tfk
 import tensorflow_probability as tfp
 import matplotlib.pyplot as plt
 import numpy as np
 from itertools import product
-from tqdm import tqdm
 import sys, os
-Dense = tfk.layers.Dense
 
 dists = tfp.distributions
 
