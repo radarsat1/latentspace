@@ -199,7 +199,7 @@ dirname += f'-{norm}{training_params["critic_ratio"]}'
 
 ds.init_viz(dirname, method, variant,
             next(x_input_gen), next(z_input_gen), next(eps_input_gen))
-ds.viz(0, decoder, encoder)
+ds.viz(0, decoder.predict, encoder.predict)
 
 pprint(all_params)
 print('output dir:',dirname)
@@ -231,4 +231,4 @@ with tqdm(range(training_params['epochs']),
             data_model.optimizer.learning_rate.assign(learning_rate)
             gen_model.optimizer.learning_rate.assign(learning_rate)
             tq.set_postfix({'lr': learning_rate})
-        ds.viz(i+1, decoder, encoder)
+        ds.viz(i+1, decoder.predict, encoder.predict)

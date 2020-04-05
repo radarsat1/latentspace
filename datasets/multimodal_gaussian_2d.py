@@ -105,7 +105,7 @@ class Dataset(object):
         tf.random.set_seed(2)
         N = self.x_input_viz.shape[1]
         D = self.x_input_viz.shape[2]
-        x_output = decoder.predict([self.z_input_viz,self.eps_input_viz])
+        x_output = decoder([self.z_input_viz,self.eps_input_viz])
         xl_ = np.array([np.minimum(np.min(self.x_input_viz[:,:,0]),np.min(x_output[:,0])),
                         np.maximum(np.max(self.x_input_viz[:,:,0]),np.max(x_output[:,0]))])
         yl_ = np.array([np.minimum(np.min(self.x_input_viz[:,:,1]),np.min(x_output[:,1])),
@@ -126,9 +126,9 @@ class Dataset(object):
         self.ax3.clear()
         # ax2.scatter(self.z_input_viz[:,0], self.z_input_viz[:,1])
         for i,m in enumerate(mus):
-            z_output = encoder.predict(self.x_input_viz[i])
+            z_output = encoder(self.x_input_viz[i])
             self.ax2.scatter(z_output[:,0], z_output[:,1], marker='.', alpha=0.2, edgecolors='none')
-            x_output = decoder.predict([z_output,self.eps_input_viz[i:i+N]])
+            x_output = decoder([z_output,self.eps_input_viz[i:i+N]])
             self.ax3.scatter(x_output[:,0], x_output[:,1], marker='.', alpha=0.2, edgecolors='none')
         self.ax3.set_xlim(self.lims[:2]); self.ax3.set_ylim(self.lims[2:4])
         self.ax3.set_title('reconstruction', fontname='cmr10')
@@ -155,3 +155,11 @@ class Dataset(object):
         self.fig.savefig(f'{self.dirname}/frame{self.frame:06d}.png')
         self.frame += 1
         tf.random.set_seed(continue_seed)
+
+if __name__=='__main__':
+    d = Dataset({'latent_prior':'normal', 'data_dim': 2, 'latent_dim': 2})
+    x = next(d.data_generator(200))
+    z = next(d.latent_generator(200))
+    e = next(d.eps_generator(200,1))
+    d.init_viz('testviz', 'testmethod', 'testvariant', x, z, e)
+    d.viz(0, lambda z: x, lambda x: z)
