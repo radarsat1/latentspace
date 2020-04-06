@@ -21,12 +21,10 @@ fn = pkg_resources.resource_filename(__name__, 'kicks_dataset.hdf5')
 class Dataset(object):
     def __init__(self, params):
         self.params = params
-        L = None
-        if 'data_dim' in params:
-            L = params['data_dim']
         with h5py.File(fn, 'r') as h:
-            self.kicks = h['data'][:,:L].astype(np.float32)
-        self.kicks *= 1.0/np.maximum(self.kicks.max(), -self.kicks.min())
+            self.kicks = np.copy(h['data']).astype(np.float32)
+        for i,k in enumerate(self.kicks):
+            self.kicks[i] *= 1.0/np.maximum(k.max(), -k.min())
         self.length = self.kicks.shape[1]
 
     def latent_generator(self, batch_size):
@@ -40,9 +38,21 @@ class Dataset(object):
             assert False and 'Unknown latent prior.'
 
     def data_generator(self, batch_size):
+        L = self.kicks.shape[1]
+        if 'data_dim' in self.params:
+            L = self.params['data_dim']
+        y = np.zeros((batch_size, L), dtype=np.float32)
+        y[:,:] = self.kicks[:batch_size,:L]
+        yield y
         while True:
             i = np.random.randint(0, self.kicks.shape[0], (batch_size,))
-            yield self.kicks[i]
+            j = np.random.randint(0, 50, (batch_size,))
+            d = np.random.randint(0, 1, (batch_size,))*2-1
+            for k in range(batch_size):
+                x = d[k]*self.kicks[i[k],j[k]:j[k]+L]
+                y[k][:x.shape[0]] = x
+                y[k][x.shape[0]:] = 0.0
+            yield y
 
     def eps_generator(self, batch_size, dims):
         while True:
@@ -81,12 +91,12 @@ class Dataset(object):
         self.scat_z = self.axs[0].scatter(z_input[:,0], z_input[:,1])
         if self.params['latent_prior']=='normal':
             self.axs[0].plot(np.cos(np.linspace(0,2*np.pi,200))*1.96,
-                          np.sin(np.linspace(0,2*np.pi,200))*1.96, 'k--', alpha=0.4)
+                             np.sin(np.linspace(0,2*np.pi,200))*1.96, 'k--', alpha=0.4)
             self.axs[0].set_xlim(-3,3)
             self.axs[0].set_ylim(-3,3)
         elif self.params['latent_prior']=='uniform':
             self.axs[0].plot([[0,1],[0,1],[0,0],[1,1]],
-                          [[0,0],[1,1],[0,1],[0,1]], 'k--', alpha=0.4)
+                             [[0,0],[1,1],[0,1],[0,1]], 'k--', alpha=0.4)
             self.axs[0].set_xlim(-0.5,1.5)
             self.axs[0].set_ylim(-0.5,1.5)
         if self.z_input_viz.shape[1]==2:
@@ -114,7 +124,7 @@ class Dataset(object):
 
         for i,p in enumerate(self.plt_sample):
             p.set_ydata(x_output[i])
-        self.scat_z.set_offsets(z_output)
+        self.scat_z.set_offsets(z_output[:,:2])
 
         x_output = decoder([z_output,self.eps_input_viz])
         for i,p in enumerate(self.plt_recon):

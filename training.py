@@ -21,6 +21,7 @@ model_params = {
     'gp_weight': 0.01,
     'normalization': {'gen':'batch', 'critic':None},
     'eps_dim': 1,
+    'filters': 32,
     'shape': {
         'n_layer_disc': 2,
         'n_hidden_disc': 200,
@@ -36,7 +37,7 @@ training_params = {
     'batch_size': 100,
     'epochs': 5000,
     'epoch_size': 100,
-    'learning_rate': 1e-3,
+    'learning_rate': 1e-4,
     'learning_rate_target': 1e-4,
     'critic_ratio': 1,
 }
