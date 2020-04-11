@@ -62,36 +62,46 @@ class Dataset(object):
             yield tf.random.normal([batch_size, dims])
 
     # Visualization
-    def init_viz(self, dirname, method, variant, x_input, z_input, eps_input):
+    def init_viz(self, dirname, method, variant, datagen, latentgen, epsgen):
         self.dirname = dirname
         self.method = method
         self.variant = variant
-        self.fig, self.axs = plt.subplots(4,4, num=1, figsize=(9,9))
+        self.fig, self.axs = plt.subplots(4,4, num=1, figsize=(18,9))
         self.axs = list(flatten(self.axs))
         self.lims = None
         self.frame = 0
-        self.x_input_viz = x_input
-        self.eps_input_viz = eps_input
-        self.z_input_viz = z_input
+        x_input_gen = datagen(32)
+        self.x_input_gen2 = datagen(2)
+        eps_input_gen = epsgen(8)
+        z_input_gen = latentgen(8)
+        self.x_input_viz = x = next(x_input_gen)
+        self.eps_input_viz = next(eps_input_gen)
+        self.z_input_viz = z = next(z_input_gen)
         self.plt_sample = []
         self.plt_orig = []
         self.plt_recon = []
+        colors = plt.cm.tab10(np.arange(9)/9)[1:-1]
+        np.random.shuffle(colors)
         for i in range(8):
-            self.plt_orig += self.axs[i*2+1].plot(x_input[i])
-            self.plt_recon += self.axs[i*2+1].plot(x_input[i]*0)
+            self.plt_orig += self.axs[i*2+1].plot(x[i])
+            self.plt_recon += self.axs[i*2+1].plot(x[i]*0)
             self.axs[i*2+1].set_yticks([])
             if i % 2 >= 1:
                 self.axs[i*2].set_yticks([])
             if i < 6:
                 self.axs[i*2].set_xticks([])
                 self.axs[i*2+1].set_xticks([])
+            else:
+                self.axs[i*2+1].set_ylabel('random')
             if i < 3:
                 self.axs[i*2].set_title('decoded', fontname='cmr10')
             if i < 2:
                 self.axs[i*2+1].set_title('reconstruction', fontname='cmr10')
             if i > 0:
-                self.plt_sample += self.axs[i*2].plot(x_input[i-1]*0)
-        self.scat_z = self.axs[0].scatter(z_input[:,0], z_input[:,1])
+                self.plt_sample += self.axs[i*2].plot(x[i-1]*0, c=colors[i-1])
+        self.scat_z = self.axs[0].scatter(z[:,0], z[:,1])
+        self.axs[0].scatter(self.z_input_viz[:7,0], self.z_input_viz[:7,1],
+                            marker='+', c=colors)
         if self.params['latent_prior']=='normal':
             self.axs[0].plot(np.cos(np.linspace(0,2*np.pi,200))*1.96,
                              np.sin(np.linspace(0,2*np.pi,200))*1.96, 'k--', alpha=0.4)
@@ -102,34 +112,41 @@ class Dataset(object):
                              [[0,0],[1,1],[0,1],[0,1]], 'k--', alpha=0.4)
             self.axs[0].set_xlim(-0.5,1.5)
             self.axs[0].set_ylim(-0.5,1.5)
-        if self.z_input_viz.shape[1]==2:
+        if z.shape[1]==2:
             self.axs[0].set_title('encoded', fontname='cmr10')
         else:
             self.axs[0].set_title('encoded (first 2 dims)', fontname='cmr10')
 
         if not os.path.exists(self.dirname):
             os.mkdir(self.dirname)
-        plt.subplots_adjust()
+        plt.subplots_adjust(left=0.05,right=0.95)
 
     def viz(self, epoch, decoder, encoder):
         continue_seed = int(tf.random.uniform([1])*65536)
         tf.random.set_seed(2)
+        # Last two visualized waveforms are randomly selected each
+        # time.  The rest stay static.
+        self.x_input_viz[6:8] = next(self.x_input_gen2)
         z_output = encoder(self.x_input_viz)
         x_output = decoder([self.z_input_viz,self.eps_input_viz])
-        yl_ = np.array([np.minimum(np.min(self.x_input_viz),np.min(x_output)),
+        np.save(f'{self.dirname}/x_output_{self.frame:06d}.npy', x_output)
+        yl = np.array([np.minimum(np.min(self.x_input_viz),np.min(x_output)),
                         np.maximum(np.max(self.x_input_viz),np.max(x_output))])
+        yl += (yl[1]-yl[0])*-0.05, (yl[1]-yl[0])*0.05
         if self.lims is None:
-            self.lims = yl_
+            self.lims = yl
         else:
-            self.lims = self.lims*0.95+yl_*0.05
+            self.lims = self.lims*0.95+yl*0.05
         for i,ax in enumerate(self.axs):
             if i!=0: ax.set_ylim(self.lims)
 
         for i,p in enumerate(self.plt_sample):
             p.set_ydata(x_output[i])
+        for i,p in enumerate(self.plt_orig[-2:]):
+            p.set_ydata(self.x_input_viz[6+i])
         self.scat_z.set_offsets(z_output[:,:2])
 
-        x_output = decoder([z_output,self.eps_input_viz])
+        x_output = decoder([z_output[:8],self.eps_input_viz])
         for i,p in enumerate(self.plt_recon):
             p.set_ydata(x_output[i])
 
