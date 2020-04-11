@@ -242,8 +242,10 @@ with tqdm(range(training_params['epochs']),
                 x_input = next(x_input_gen)
                 z_input = next(z_input_gen)
                 eps_input = next(eps_input_gen)
-                data_model.train_on_batch([x_input,eps_input,z_input],
-                                          [fakes, reals, dummy])
+                D=data_model.train_on_batch([x_input,eps_input,z_input],
+                                            [fakes, reals, dummy])
+                if np.any(np.isnan(D)):
+                    print('critic loss',D)
 
             x_input = next(x_input_gen)
             z_input = next(z_input_gen)
@@ -251,13 +253,10 @@ with tqdm(range(training_params['epochs']),
             for l in critic.layers: l.trainable=False
             for l in encoder.layers: l.trainable=True
             for l in decoder.layers: l.trainable=True
-            gen_model.train_on_batch([x_input,eps_input,z_input],
-                                     [fakes, reals])
-
-            learning_rate *= rate_decay
-            data_model.optimizer.learning_rate.assign(learning_rate)
-            gen_model.optimizer.learning_rate.assign(learning_rate)
-            tq.set_postfix({'lr': learning_rate})
+            G=gen_model.train_on_batch([x_input,eps_input,z_input],
+                                       [fakes, reals])
+            if np.any(np.isnan(G)):
+                print('generator loss',G)
 
             if model_params['type']=='gan':
                 # In GAN configuration we have no encoder, so instead
@@ -265,4 +264,11 @@ with tqdm(range(training_params['epochs']),
                 x_output = decoder.predict([z_input,eps_input])
                 encoder.train_on_batch(x_output, z_input)
 
+            if rate_decay != 1.0:
+                learning_rate *= rate_decay
+                data_model.optimizer.learning_rate.assign(learning_rate)
+                gen_model.optimizer.learning_rate.assign(learning_rate)
+        tq.set_postfix({'G':G[0], 'D':D[0],'lr': learning_rate})
+        decoder.save(f'{ds.dirname}/decoder_{ds.frame:06d}.keras')
+        encoder.save(f'{ds.dirname}/encoder_{ds.frame:06d}.keras')
         ds.viz(i+1, decoder.predict, encoder.predict)
