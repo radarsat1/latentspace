@@ -205,6 +205,32 @@ ds.viz(0, decoder.predict, encoder.predict)
 pprint(all_params)
 print('output dir:',dirname)
 
+if model_params['type']=='gan':
+    opt = tfk.optimizers.Adam(learning_rate=training_params['learning_rate'], beta_1=0.5)
+    encoder.compile(opt, 'mse')
+
+# Pretrains on the "average" only of course
+if False:
+    print('Pretraining...')
+    opt = tfk.optimizers.Adam(learning_rate=training_params['learning_rate'],
+                              beta_1=0.5)
+    inp_x = tfk.layers.Input(dataset_params['data_dim'])
+    inp_z = tfk.layers.Input(dataset_params['latent_dim'])
+    inp_e = tfk.layers.Input(model_params['eps_dim'])
+    autoenc_x = tfk.Model([inp_x,inp_e], decoder([encoder(inp_x),inp_e]))
+    autoenc_z = tfk.Model([inp_z,inp_e], encoder(decoder([inp_z,inp_e])))
+    autoenc_x.compile(opt, 'mse')
+    autoenc_z.compile(opt, 'mse')
+    for i in tqdm(range(2000),total=2000):
+        x_input = next(x_input_gen)
+        z_input = next(z_input_gen)
+        eps_input = next(eps_input_gen)
+        autoenc_x.train_on_batch([x_input, eps_input], x_input)
+        autoenc_z.train_on_batch([z_input, eps_input], z_input)
+        if i%100==0:
+            ds.viz(0, decoder.predict, encoder.predict)
+
+print('Training...')
 with tqdm(range(training_params['epochs']),
           total=training_params['epochs']) as tq:
     for i in tq:
@@ -232,4 +258,11 @@ with tqdm(range(training_params['epochs']),
             data_model.optimizer.learning_rate.assign(learning_rate)
             gen_model.optimizer.learning_rate.assign(learning_rate)
             tq.set_postfix({'lr': learning_rate})
+
+            if model_params['type']=='gan':
+                # In GAN configuration we have no encoder, so instead
+                # we train it by MSE just to project x back onto z.
+                x_output = decoder.predict([z_input,eps_input])
+                encoder.train_on_batch(x_output, z_input)
+
         ds.viz(i+1, decoder.predict, encoder.predict)
