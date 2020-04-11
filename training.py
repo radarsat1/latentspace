@@ -15,13 +15,12 @@ dataset_params = {
 # Model parameters
 model_params = {
     'name': 'dense',
-    'type': ['veegan','bigan','vanilla'][1],
+    'type': ['veegan','bigan','gan'][1],
     'loss': ['sigmoid','wgan','began'][1],
-    'variant': ['sn','0gp','1gp'][1],
+    'variant': ['sn','0gp','1gp',None][1],
     'gp_weight': 0.01,
     'normalization': {'gen':'batch', 'critic':None},
     'eps_dim': 1,
-    'filters': 32,
     'shape': {
         'n_layer_disc': 2,
         'n_hidden_disc': 200,
@@ -29,6 +28,7 @@ model_params = {
         'n_hidden_gen': 200,
         'n_layer_inf': 2,
         'n_hidden_inf': 200,
+        'filters': 32,
     },
 }
 
@@ -53,7 +53,8 @@ try:
         for a in arg[0].split('.'):
             parm = p
             p = p[a]
-        if isinstance(parm[a],str):     parm[a] = arg[1]
+        if arg[1] == 'none':            parm[a] = None
+        elif isinstance(parm[a],str):   parm[a] = arg[1]
         elif parm[a] is None:           parm[a] = arg[1]
         elif isinstance(parm[a],float): parm[a] = float(arg[1])
         elif isinstance(parm[a],int):   parm[a] = int(arg[1])
@@ -114,7 +115,7 @@ if model_params['type']=='veegan':
     gen_model = tfk.Model([p_x, eps, z], [critic([q_x([z,eps]), z]),
                                           tf.reshape(p_z(q_x([z,eps])).log_prob(z),
                                                      (-1,1))])
-elif model_params['type'] in ['bigan','vanilla']:
+elif model_params['type'] in ['bigan','gan']:
     gen_model = tfk.Model([p_x, eps, z], [critic([q_x([z,eps]), z]),
                                           critic([p_x, p_z(p_x)])])
 else:
@@ -143,7 +144,7 @@ for l in critic.layers: l.trainable=False
 for l in encoder.layers: l.trainable=True
 for l in decoder.layers: l.trainable=True
 opt = tfk.optimizers.Adam(learning_rate=training_params['learning_rate'], beta_1=0.5)
-if model_params['type'] in ['veegan','vanilla']:
+if model_params['type'] in ['veegan','gan']:
     if model_params['loss'] == 'wgan':
         gen_model.compile(opt, [wgan_loss, recon_likelihood])
     elif model_params['loss'] == 'sigmoid':
@@ -173,13 +174,12 @@ rate_decay = np.exp((np.log(training_params['learning_rate_target'])
 
 z_input_gen = ds.latent_generator(training_params['batch_size'])
 x_input_gen = ds.data_generator(training_params['batch_size'])
-def eps_input_generator():
+def eps_input_generator(batch_size):
     while True:
-        yield tf.random.normal([training_params['batch_size'],
-                                model_params['eps_dim']])
-eps_input_gen = eps_input_generator()
+        yield tf.random.normal([batch_size, model_params['eps_dim']])
+eps_input_gen = eps_input_generator(training_params['batch_size'])
 
-method = {'veegan':'VEEGAN', 'bigan':'BiGAN', 'vanilla':'Vanilla GAN'}\
+method = {'veegan':'VEEGAN', 'bigan':'BiGAN', 'gan':'GAN'}\
          [model_params['type']]
 variant = {'none':'','sn':'SN','0gp':'0GP','1gp':'1GP'}[model_params['variant']]
 variantfn = variant
@@ -199,7 +199,7 @@ if norm != '00':
 dirname += f'-{norm}{training_params["critic_ratio"]}'
 
 ds.init_viz(dirname, method, variant,
-            next(x_input_gen), next(z_input_gen), next(eps_input_gen))
+            ds.data_generator, ds.latent_generator, eps_input_generator)
 ds.viz(0, decoder.predict, encoder.predict)
 
 pprint(all_params)

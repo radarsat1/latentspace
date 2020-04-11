@@ -122,7 +122,7 @@ class Model(object):
 
         x = tfk.layers.Input(input_dim)
         z = tfk.layers.Input(latent_dim)
-        if self.params['type'] == 'vanilla':
+        if self.params['type'] == 'gan':
             h = z
         else:
             h = tfk.layers.Concatenate()([x,z])

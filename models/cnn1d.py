@@ -13,12 +13,18 @@ import tensorflow_probability as tfp
 dists = tfp.distributions
 tfkl = tfk.layers
 
+CODE=64
+
 class Model(object):
     def __init__(self, params, dataset):
         self.params = params
         self.dataset = dataset
 
     def decoder_network(self, bn=True):
+        L = self.dataset.params['latent_dim']
+        D = self.dataset.params['data_dim']
+        E = self.params['eps_dim']
+        F = self.params['shape']['filters']
         if self.params['normalization']['gen'] == 'batch':
             Norm = tfk.layers.BatchNormalization
             Norm = tf.compat.v1.keras.layers.BatchNormalization
@@ -28,63 +34,81 @@ class Model(object):
         else:
             Norm = lambda: (lambda x: x)
         if not bn: Norm = lambda: (lambda x: x)
-        inp = x = tfkl.Input(self.dataset.params['latent_dim'])
-        e = tfkl.Input(self.params['eps_dim'])
+
+        inp = x = tfkl.Input(L)
+        e = tfkl.Input(E)
         # xi = tfkl.Reshape((self.dataset.params['latent_dim'],1))(x)
         # xe = tfkl.Reshape((self.dataset.params['latent_dim'],1))(e)
-        x = tfkl.Concatenate()([x,e])
-        x = tfkl.Dense(self.dataset.params['latent_dim']*self.params['filters'])(x)
+
+        # x = tfkl.Concatenate()([x,e])
+
+        # x = tfkl.Dense(L*F)(x)
+        # x = tfkl.Reshape((L,F))(x)
+        x = tfkl.Dense(CODE)(x)
         x = tfkl.LeakyReLU()(x)
-        x = Norm()(x)
-        x = tfkl.Reshape((self.dataset.params['latent_dim'],self.params['filters']))(x)
-        while x.shape[1] < self.dataset.params['data_dim']:
+        x = tfkl.Reshape((CODE,1))(x)
+        x = tfkl.Conv1D(F,1,padding='causal')(x)
+        # x = Norm()(x)
+        x = tfkl.LeakyReLU()(x)
+        while x.shape[1] < D:
             y = x
-            x = tfkl.Conv1D(self.params['filters'],3,padding='same')(x)
-            x = tfkl.LeakyReLU()(x)
+            x = tfkl.Conv1D(F,7,padding='causal')(x)
             x = Norm()(x)
+            x = tfkl.LeakyReLU()(x)
             x = tfkl.Add()([x,y])
-            x = tfkl.UpSampling1D(2)(x)
-        x = tfkl.Conv1D(self.params['filters'],3,padding='same')(x)
-        x = tfkl.LeakyReLU()(x)
+            x = tfkl.UpSampling1D(4)(x)
+        x = tfkl.Conv1D(F,5,padding='causal')(x)
         x = Norm()(x)
-        x = tfkl.Conv1D(1,3,padding='same')(x)
-        x = tfkl.Reshape((self.dataset.params['data_dim'],))(x)
+        x = tfkl.LeakyReLU()(x)
+        x = tfkl.Conv1D(1,5,padding='causal')(x)
+        x = tfkl.Reshape((D,))(x)
+        # x = tfkl.Activation('tanh')(x)
         return tfk.Model([inp,e],x)
 
-    def encoder_network(self, bn=True, stochastic=True, extradim=False):
-        if self.params['normalization']['gen'] == 'batch':
+    def encoder_network(self, bn=None,
+                        stochastic=True, endit=True, extradim=False):
+        L = self.dataset.params['latent_dim']
+        TL = L + sum(range(L+1))
+        D = self.dataset.params['data_dim']
+        F = self.params['shape']['filters']
+        if bn is None:
+            bn = self.params['normalization']['gen']
+        if bn == 'batch':
             Norm = tfk.layers.BatchNormalization
             Norm = tf.compat.v1.keras.layers.BatchNormalization
             # why? https://github.com/tensorflow/tensorflow/issues/37673
-        elif self.params['normalization']['gen'] == 'layer':
+        elif bn == 'layer':
             Norm = tfk.layers.LayerNormalization
         else:
             Norm = lambda: (lambda x: x)
         if not bn: Norm = lambda: (lambda x: x)
         if extradim:
-            inp = x = tfkl.Input([self.dataset.params['data_dim'],extradim])
+            inp = x = tfkl.Input([D,extradim])
         else:
-            inp = x = tfkl.Input(self.dataset.params['data_dim'])
-            x = tfkl.Reshape((self.dataset.params['data_dim'],1))(x)
-        L = self.dataset.params['latent_dim']
-        TL = L + sum(range(L+1))
-        x = tfkl.Conv1D(self.params['filters'],3,padding='same')(x)
-        while x.shape[1] > TL:
+            inp = x = tfkl.Input(D)
+            x = tfkl.Reshape((D,1))(x)
+        x = tfkl.Conv1D(F,3,padding='same')(x)
+        x = tfkl.LeakyReLU()(x)
+        while x.shape[1] > TL*0+CODE:
             y = x
-            x = tfkl.Conv1D(self.params['filters'],3,padding='same')(x)
-            x = tfkl.LeakyReLU()(x)
+            x = tfkl.Conv1D(F,7,padding='same')(x)
             x = Norm()(x)
+            x = tfkl.LeakyReLU()(x)
             x = tfkl.Add()([x,y])
-            x = tfkl.MaxPool1D(2)(x)
-        x = tfkl.Conv1D(self.params['filters'],3,padding='same')(x)
-        x = tfkl.LeakyReLU()(x)
+            # x = tfkl.Conv1D(F,7,padding='same',strides=4)(x)
+            x = tfkl.AvgPool1D(4)(x)
         x = Norm()(x)
-        x = tfkl.Conv1D(1,1)(x)
+        x = tfkl.LeakyReLU()(x)
+        x = tfkl.Conv1D(1,3,padding='same')(x)
+        x = Norm()(x)
+        x = tfkl.LeakyReLU()(x)
         x = tfkl.Flatten()(x)
-        x = tfkl.LeakyReLU()(x)
-        x = Norm()(x)
 
-        if stochastic:
+        x = tfkl.Dense(CODE)(x)
+        x = Norm()(x)
+        x = tfkl.LeakyReLU()(x)
+
+        if stochastic and endit:
             p = tfkl.Dense(TL)(x)
             s = tfp.bijectors.FillScaleTriL().forward(p[:,L:])
             p = p[:,:L]
@@ -92,25 +116,34 @@ class Model(object):
                 lambda x: dists.MultivariateNormalTriL(loc=x[0], scale_tril=x[1]),
                 lambda x: x.sample(),
                 name="p_x")([p,s])
-        else:
-            p = tfkl.Dense(L)(x)
+        elif endit:
+            x = tfkl.Dense(L)(x)
 
         return tfk.Model(inp,x)
 
     def critic_network(self):
         # TODO: critic batch/layer normalization
         # TODO: spectral normalization
-        Norm = tf.compat.v1.keras.layers.BatchNormalization
         D = self.dataset.params['data_dim']
         L = self.dataset.params['latent_dim']
+        F = self.params['shape']['filters']
         inp = x = tfkl.Input(D)
+        x = tfkl.Dropout(0.3)(x)
         x = tfkl.Reshape((D,1))(x)
         lat = z = tfkl.Input(L)
-        z = tfkl.Reshape((1,L))(z)
-        z = tfkl.Lambda(lambda y: tf.repeat(y, D, axis=1))(z)
-        x = tfkl.Concatenate()([x,z])
-        x = self.encoder_network(bn=False,stochastic=False,extradim=1+L)(x)
-        x = tfkl.Dense(L*self.params['filters'])(x)
+        bn = False
+        if self.params['normalization']['critic'] is not None:
+            bn = self.params['normalization']['critic']
+        ed = 1
+        if True and self.params['type'] != 'gan':
+            z = tfkl.Reshape((1,L))(z)
+            z = tfkl.Lambda(lambda y: tf.repeat(y, D, axis=1))(z)
+            x = tfkl.Concatenate()([x,z])
+            ed += L
+        x = self.encoder_network(bn=bn,stochastic=False,endit=False,extradim=ed)(x)
+        if False and self.params['type'] != 'gan':
+            x = tfkl.Concatenate()([x,z])
+        x = tfkl.Dense(L)(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Dense(1)(x)
         return tfk.Model([inp,lat],x)
