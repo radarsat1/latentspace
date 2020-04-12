@@ -17,37 +17,41 @@ kernel[off] = 1.0
 kernel *= hann(kernel_size)
 kernel = tf.constant(kernel.reshape((-1,1,1)), dtype=tf.float32)
 
+@tf.function
 def halfband1d(x,scale=1):
-    if len(tf.shape(x))==1:
-        x = tf.reshape(x, (1,-1,1))
-    if len(tf.shape(x))==2:
-        x = tf.expand_dims(x, -1)
+    # if tf.shape(tf.shape(x))[0]==1:
+    #     x = tf.reshape(x, (1,-1,1))
+    # if tf.shape(tf.shape(x))[0]==2:
+    #     x = tf.expand_dims(x, -1)
     y = tf.nn.conv1d(x, filters=kernel*scale,
                       stride=1, padding='SAME')
     return y
 
+@tf.function
 def residual1d(x,scale=1):
-    if len(tf.shape(x))==1:
-        x = tf.reshape(x, (1,-1,1))
-    if len(tf.shape(x))==2:
-        x = tf.expand_dims(x, -1)
+    # if tf.shape(tf.shape(x))[0]==1:
+    #     x = tf.reshape(x, (1,-1,1))
+    # if tf.shape(tf.shape(x))[0]==2:
+    #     x = tf.expand_dims(x, -1)
     return x - halfband1d(x,0.5)
 
+@tf.function
 def upsample1d(x):
-    if len(tf.shape(x))==1:
-        x = tf.reshape(x, (1,-1,1))
-    if len(tf.shape(x))==2:
-        x = tf.expand_dims(x, -1)
+    # if tf.shape(tf.shape(x))[0]==1:
+    #     x = tf.reshape(x, (1,-1,1))
+    # if tf.shape(tf.shape(x))[0]==2:
+    #     x = tf.expand_dims(x, -1)
     s = tf.shape(x)+tf.shape(x)*[0,1,0]
     x = tf.expand_dims(x,-1)
     x = tf.concat([x, tf.zeros_like(x)],axis=-2)
     return halfband1d(tf.reshape(x, s))
 
+@tf.function
 def downsample1d(x):
-    if len(tf.shape(x))==1:
-        x = tf.reshape(x, (1,-1,1))
-    if len(tf.shape(x))==2:
-        x = tf.expand_dims(x, -1)
+    # if tf.shape(tf.shape(x))[0]==1:
+    #     x = tf.reshape(x, (1,-1,1))
+    # if tf.shape(tf.shape(x))[0]==2:
+    #     x = tf.expand_dims(x, -1)
     y = halfband1d(x,0.5)
     return y[:,::2,:]
 

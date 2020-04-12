@@ -45,7 +45,7 @@ class Dataset(object):
         # y[:,:] = self.kicks[:batch_size,:L]
         # yield y
         while True:
-            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))#%10
+            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))
             j = np.random.randint(0, 10, (batch_size,))
             d = np.random.randint(0, 2, (batch_size,))*2-1
             for k in range(batch_size):
@@ -122,8 +122,9 @@ class Dataset(object):
         plt.subplots_adjust(left=0.05,right=0.95)
 
     def viz(self, epoch, decoder, encoder):
-        continue_seed = int(tf.random.uniform([1])*65536)
-        tf.random.set_seed(2)
+        # continue_seed = int(tf.random.uniform([1])*65536)
+        # tf.random.set_seed(2)
+
         # Last two visualized waveforms are randomly selected each
         # time.  The rest stay static.
         self.x_input_viz[6:8] = next(self.x_input_gen2)
@@ -156,7 +157,7 @@ class Dataset(object):
         self.fig.savefig('now.png')
         self.fig.savefig(f'{self.dirname}/frame{self.frame:06d}.png')
         self.frame += 1
-        tf.random.set_seed(continue_seed)
+        # tf.random.set_seed(continue_seed)
 
 if __name__=='__main__':
     d = Dataset({'latent_prior':'normal', 'data_dim': 2, 'latent_dim': 2})

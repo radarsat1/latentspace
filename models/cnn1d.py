@@ -9,6 +9,7 @@
 import tensorflow as tf
 import tensorflow.keras as tfk
 import tensorflow_probability as tfp
+from utils import updown
 
 dists = tfp.distributions
 tfkl = tfk.layers
@@ -66,7 +67,8 @@ class Model(object):
         return tfk.Model([inp,e],x)
 
     def encoder_network(self, bn=None,
-                        stochastic=True, endit=True, extradim=False):
+                        stochastic=True, endit=True, extradim=False,
+                        downsample=False):
         L = self.dataset.params['latent_dim']
         TL = L + sum(range(L+1))
         D = self.dataset.params['data_dim']
@@ -87,16 +89,27 @@ class Model(object):
         else:
             inp = x = tfkl.Input(D)
             x = tfkl.Reshape((D,1))(x)
+        x0 = x
+        if downsample:
+            x1 = tfkl.Lambda(updown.residual1d)(x0)
+            # x = tfkl.Concatenate()([x,x1])
+            x = x1
         x = tfkl.Conv1D(F,3,padding='same')(x)
         x = tfkl.LeakyReLU()(x)
         while x.shape[1] > TL*0+CODE:
+            if downsample:
+                x1 = tfkl.Lambda(updown.residual1d)(x0)
+                x = tfkl.Concatenate()([x,x1])
             y = x
             x = tfkl.Conv1D(F,7,padding='same')(x)
             x = Norm()(x)
             x = tfkl.LeakyReLU()(x)
-            x = tfkl.Add()([x,y])
+            # x = tfkl.Add()([x,y])
             # x = tfkl.Conv1D(F,7,padding='same',strides=4)(x)
             x = tfkl.AvgPool1D(4)(x)
+            if downsample:
+                x0 = tfkl.Lambda(updown.downsample1d)(x0)
+                x0 = tfkl.Lambda(updown.downsample1d)(x0)
         x = Norm()(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Conv1D(1,3,padding='same')(x)
@@ -128,21 +141,25 @@ class Model(object):
         L = self.dataset.params['latent_dim']
         F = self.params['shape']['filters']
         inp = x = tfkl.Input(D)
-        x = tfkl.Dropout(0.3)(x)
+        # x = tfkl.Dropout(0.3)(x)
+        # x = tfkl.GaussianNoise(0.3)(x)
         x = tfkl.Reshape((D,1))(x)
         lat = z = tfkl.Input(L)
         bn = False
         if self.params['normalization']['critic'] is not None:
             bn = self.params['normalization']['critic']
         ed = 1
-        if True and self.params['type'] != 'gan':
+        if False and self.params['type'] != 'gan':
             z = tfkl.Reshape((1,L))(z)
             z = tfkl.Lambda(lambda y: tf.repeat(y, D, axis=1))(z)
             x = tfkl.Concatenate()([x,z])
             ed += L
-        x = self.encoder_network(bn=bn,stochastic=False,endit=False,extradim=ed)(x)
-        if False and self.params['type'] != 'gan':
+        x = self.encoder_network(bn=bn,stochastic=False,endit=False,extradim=ed,
+                                 downsample=False)(x)
+        if True and self.params['type'] != 'gan':
             x = tfkl.Concatenate()([x,z])
+        x = tfkl.Dense(L)(x)
+        x = tfkl.LeakyReLU()(x)
         x = tfkl.Dense(L)(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Dense(1)(x)
