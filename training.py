@@ -100,10 +100,11 @@ p_x = tfk.layers.Input(dataset_params['data_dim'])
 
 from utils.updown import downsample1d
 x0 = tfk.layers.Reshape((dataset_params['data_dim'],1))(p_x)
-x1 = tfk.layers.Lambda(downsample1d)(x0)
-x2 = tfk.layers.Lambda(downsample1d)(x1)
-x3 = tfk.layers.Lambda(downsample1d)(x2)
-p_x_di = [x0,x1,x2,x3]
+p_x_di = [x0]
+for i in range(len(di)-1):
+    x0 = tfk.layers.Lambda(downsample1d)(x0)
+    x0 = tfk.layers.Lambda(downsample1d)(x0)
+    p_x_di.append(x0)
 crit = tfk.Model([p_x, z], critic([p_x,z]+p_x_di))
 
 p_z = tfk.Model(p_x, encoder(p_x))

@@ -14,7 +14,7 @@ from utils import updown
 dists = tfp.distributions
 tfkl = tfk.layers
 
-CODE=32
+CODE=64
 
 class Model(object):
     def __init__(self, params, dataset):
@@ -54,18 +54,16 @@ class Model(object):
         # x = Norm()(x)
         # x = tfkl.LeakyReLU()(x)
         while x.shape[1] < D:
-            # y = x
+            y = x
             x = tfkl.Conv1D(F,7,padding='causal')(x)
-            y = tfkl.Conv1D(1,1)(x)
-            outlayers.append(y)
-            print('outlayers:',outlayers[-1].shape)
             x = Norm()(x)
             x = tfkl.LeakyReLU()(x)
-            # x = tfkl.Add()([x,y])
-            x = tfkl.UpSampling1D(2)(x)
+            outlayers.append(tfkl.Conv1D(1,1)(x))
+            print('outlayers:',outlayers[-1].shape)
+            x = tfkl.Add()([x,y])
+            x = tfkl.UpSampling1D(4)(x)
         x = tfkl.Conv1D(F,5,padding='causal')(x)
-        y = tfkl.Conv1D(1,1)(x)
-        outlayers.append(y)
+        outlayers.append(tfkl.Conv1D(1,1)(x))
         print('outlayers:',outlayers[-1].shape)
         x = Norm()(x)
         x = tfkl.LeakyReLU()(x)
@@ -114,7 +112,7 @@ class Model(object):
             x = tfkl.Conv1D(F,7,padding='same')(x)
             x = Norm()(x)
             x = tfkl.LeakyReLU()(x)
-            # x = tfkl.Add()([x,y])
+            x = tfkl.Add()([x,y])
             # x = tfkl.Conv1D(F,7,padding='same',strides=4)(x)
             # if downsample:
             #     x = tfkl.AvgPool1D(2)(x)
@@ -123,7 +121,7 @@ class Model(object):
             #     x1 = tfkl.Lambda(updown.residual1d)(x0)
             #     x = tfkl.Concatenate()([x,x1])
             # else:
-            x = tfkl.AvgPool1D(2)(x)
+            x = tfkl.AvgPool1D(4)(x)
         if decinputs is not None:
             print(x.shape, decinputs[j].shape)
             x = tfkl.Concatenate()([x,decinputs[j]])
@@ -170,7 +168,7 @@ class Model(object):
         if self.params['normalization']['critic'] is not None:
             bn = self.params['normalization']['critic']
         ed = 1
-        if False and self.params['type'] != 'gan':
+        if True and self.params['type'] != 'gan':
             z = tfkl.Reshape((1,L))(z)
             z = tfkl.Lambda(lambda y: tf.repeat(y, D, axis=1))(z)
             x = tfkl.Concatenate()([x,z])
@@ -182,7 +180,7 @@ class Model(object):
         else:
             di = []
         x = E([x]+di)
-        if True and self.params['type'] != 'gan':
+        if False and self.params['type'] != 'gan':
             x = tfkl.Concatenate()([x,z])
         x = tfkl.Dense(L)(x)
         x = tfkl.LeakyReLU()(x)

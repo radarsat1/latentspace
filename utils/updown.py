@@ -17,7 +17,7 @@ kernel[off] = 1.0
 kernel *= hann(kernel_size)
 kernel = tf.constant(kernel.reshape((-1,1,1)), dtype=tf.float32)
 
-@tf.function
+#@tf.function
 def halfband1d(x,scale=1):
     # if tf.shape(tf.shape(x))[0]==1:
     #     x = tf.reshape(x, (1,-1,1))
@@ -27,7 +27,7 @@ def halfband1d(x,scale=1):
                       stride=1, padding='SAME')
     return y
 
-@tf.function
+#@tf.function
 def residual1d(x,scale=1):
     # if tf.shape(tf.shape(x))[0]==1:
     #     x = tf.reshape(x, (1,-1,1))
@@ -35,7 +35,7 @@ def residual1d(x,scale=1):
     #     x = tf.expand_dims(x, -1)
     return x - halfband1d(x,0.5)
 
-@tf.function
+#@tf.function
 def upsample1d(x):
     # if tf.shape(tf.shape(x))[0]==1:
     #     x = tf.reshape(x, (1,-1,1))
@@ -46,7 +46,7 @@ def upsample1d(x):
     x = tf.concat([x, tf.zeros_like(x)],axis=-2)
     return halfband1d(tf.reshape(x, s))
 
-@tf.function
+#@tf.function
 def downsample1d(x):
     # if tf.shape(tf.shape(x))[0]==1:
     #     x = tf.reshape(x, (1,-1,1))

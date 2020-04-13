@@ -45,10 +45,10 @@ class Dataset(object):
         # y[:,:] = self.kicks[:batch_size,:L]
         # yield y
         while True:
-            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))%4
-            j = np.random.randint(0, 10, (batch_size,))*0
+            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))
+            j = np.random.randint(0, 10, (batch_size,))
             d = np.random.randint(0, 2, (batch_size,))*2-1
-            d = d*0+1
+            #d = d*0+1
             for k in range(batch_size):
                 x = d[k]*self.kicks[i[k],j[k]:j[k]+L]
                 if x.shape[0] < L:
@@ -99,10 +99,14 @@ class Dataset(object):
             if i < 2:
                 self.axs[i*2+1].set_title('reconstruction', fontname='cmr10')
             if i > 0:
-                self.plt_sample += self.axs[i*2].plot(x[i-1]*0, c=colors[i-1])
+                #self.plt_sample += self.axs[i*2].plot(x[i-1], c=colors[i-1])
+                f=self.params['data_dim']//2+1
+                self.plt_sample += self.axs[i*2].plot(x[i-1][:f]*0)
+                self.plt_sample += self.axs[i*2].plot(x[i-1][:f]*0)
+                self.axs[i*2].set_yticks([])
         self.scat_z = self.axs[0].scatter(z[:,0], z[:,1])
-        self.axs[0].scatter(self.z_input_viz[:7,0], self.z_input_viz[:7,1],
-                            marker='+', c=colors)
+        # self.axs[0].scatter(self.z_input_viz[:7,0], self.z_input_viz[:7,1],
+        #                     marker='+', c=colors)
         if self.params['latent_prior']=='normal':
             self.axs[0].plot(np.cos(np.linspace(0,2*np.pi,200))*1.96,
                              np.sin(np.linspace(0,2*np.pi,200))*1.96, 'k--', alpha=0.4)
@@ -142,8 +146,8 @@ class Dataset(object):
         for i,ax in enumerate(self.axs):
             if i!=0: ax.set_ylim(self.lims)
 
-        for i,p in enumerate(self.plt_sample):
-            p.set_ydata(x_output[i])
+        # for i,p in enumerate(self.plt_sample):
+        #     p.set_ydata(x_output[i])
         for i,p in enumerate(self.plt_orig[-2:]):
             p.set_ydata(self.x_input_viz[6+i])
         self.scat_z.set_offsets(z_output[:,:2])
@@ -151,6 +155,15 @@ class Dataset(object):
         x_output = decoder([z_output[:8],self.eps_input_viz])[0]
         for i,p in enumerate(self.plt_recon):
             p.set_ydata(x_output[i])
+        for i,p in enumerate(self.plt_sample):
+            if i%2==0:
+                f = 20*np.log10(np.abs(np.fft.rfft(self.x_input_viz[i//2])))
+                p.set_data(np.arange(f.shape[0]),
+                           (f-f.min())/(f.max()-f.min())*1.5-0.5)
+            else:
+                f = 20*np.log10(np.abs(np.fft.rfft(x_output[i//2])))
+                p.set_data(np.arange(f.shape[0]),
+                           (f-f.min())/(f.max()-f.min())*1.5-0.5)
 
         self.fig.suptitle(
             f'{self.z_input_viz.shape[1]}D {self.method} {self.variant}: Epoch {epoch}',
