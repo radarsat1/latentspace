@@ -60,7 +60,7 @@ class Model(object):
             x = tfkl.LeakyReLU()(x)
             outlayers.append(tfkl.Conv1D(1,1)(x))
             print('outlayers:',outlayers[-1].shape)
-            x = tfkl.Add()([x,y])
+            x = tfkl.Concatenate()([x,y])
             x = tfkl.UpSampling1D(4)(x)
         x = tfkl.Conv1D(F,5,padding='causal')(x)
         outlayers.append(tfkl.Conv1D(1,1)(x))
@@ -112,7 +112,7 @@ class Model(object):
             x = tfkl.Conv1D(F,7,padding='same')(x)
             x = Norm()(x)
             x = tfkl.LeakyReLU()(x)
-            x = tfkl.Add()([x,y])
+            x = tfkl.Concatenate()([x,y])
             # x = tfkl.Conv1D(F,7,padding='same',strides=4)(x)
             # if downsample:
             #     x = tfkl.AvgPool1D(2)(x)

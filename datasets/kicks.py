@@ -85,7 +85,7 @@ class Dataset(object):
         np.random.shuffle(colors)
         for i in range(8):
             self.plt_orig += self.axs[i*2+1].plot(x[i])
-            self.plt_recon += self.axs[i*2+1].plot(x[i]*0)
+            self.plt_recon += self.axs[i*2+1].plot(x[i]*0, alpha=0.8)
             self.axs[i*2+1].set_yticks([])
             if i % 2 >= 1:
                 self.axs[i*2].set_yticks([])
@@ -102,8 +102,10 @@ class Dataset(object):
                 #self.plt_sample += self.axs[i*2].plot(x[i-1], c=colors[i-1])
                 f=self.params['data_dim']//2+1
                 self.plt_sample += self.axs[i*2].plot(x[i-1][:f]*0)
-                self.plt_sample += self.axs[i*2].plot(x[i-1][:f]*0)
+                self.plt_sample += self.axs[i*2].plot(x[i-1][:f]*0, alpha=0.8)
                 self.axs[i*2].set_yticks([])
+                self.axs[i*2].set_ylim(-1,1.5)
+                self.axs[i*2].set_xticks([])
         self.scat_z = self.axs[0].scatter(z[:,0], z[:,1])
         # self.axs[0].scatter(self.z_input_viz[:7,0], self.z_input_viz[:7,1],
         #                     marker='+', c=colors)
@@ -144,7 +146,7 @@ class Dataset(object):
         else:
             self.lims = self.lims*0.95+yl*0.05
         for i,ax in enumerate(self.axs):
-            if i!=0: ax.set_ylim(self.lims)
+            if i!=0 and i%2==1: ax.set_ylim(self.lims)
 
         # for i,p in enumerate(self.plt_sample):
         #     p.set_ydata(x_output[i])

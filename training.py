@@ -98,13 +98,17 @@ z = tfk.layers.Input(dataset_params['latent_dim'])
 eps = tfk.layers.Input(model_params['eps_dim'])
 p_x = tfk.layers.Input(dataset_params['data_dim'])
 
-from utils.updown import downsample1d
+from utils.updown import downsample1d, upsample1d
 x0 = tfk.layers.Reshape((dataset_params['data_dim'],1))(p_x)
-p_x_di = [x0]
-for i in range(len(di)-1):
-    x0 = tfk.layers.Lambda(downsample1d)(x0)
-    x0 = tfk.layers.Lambda(downsample1d)(x0)
-    p_x_di.append(x0)
+p_x_di = []
+for i in range(len(di)):
+    y = tfk.layers.Lambda(downsample1d)(x0)
+    y = tfk.layers.Lambda(downsample1d)(y)
+    x1 = tfk.layers.Lambda(upsample1d)(y)
+    x1 = tfk.layers.Lambda(upsample1d)(x1)
+    x1 = tfk.layers.Add()([x0,-x1])
+    p_x_di.append(x1)
+    x0 = y
 crit = tfk.Model([p_x, z], critic([p_x,z]+p_x_di))
 
 p_z = tfk.Model(p_x, encoder(p_x))
@@ -201,7 +205,7 @@ if training_params['critic_ratio'] > 1:
     variantfn += f'-{training_params["critic_ratio"]}:1'
     variant += f' {training_params["critic_ratio"]}:1'
 
-dirname = f'frames-{method}{dataset_params["data_dim"]}D-{variantfn}-withDS'
+dirname = f'frames-{method}{dataset_params["data_dim"]}D-{variantfn}-multirate'
 normgen = {'batch':'B','layer':'L'}.get(model_params['normalization']['gen'],'0')
 normcritic = {'batch':'B','layer':'L'}.get(model_params['normalization']['critic'],'0')
 norm = normgen+normcritic
