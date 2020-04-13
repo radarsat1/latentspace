@@ -14,7 +14,7 @@ from utils import updown
 dists = tfp.distributions
 tfkl = tfk.layers
 
-CODE=64
+CODE=32
 
 class Model(object):
     def __init__(self, params, dataset):
@@ -35,6 +35,7 @@ class Model(object):
         else:
             Norm = lambda: (lambda x: x)
         if not bn: Norm = lambda: (lambda x: x)
+        outlayers = []
 
         inp = x = tfkl.Input(L)
         e = tfkl.Input(E)
@@ -48,25 +49,32 @@ class Model(object):
         x = tfkl.Dense(CODE)(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Reshape((CODE,1))(x)
-        x = tfkl.Conv1D(F,1,padding='causal')(x)
+        # outlayers.append(x)
+        # x = tfkl.Conv1D(F,1,padding='causal')(x)
         # x = Norm()(x)
-        x = tfkl.LeakyReLU()(x)
+        # x = tfkl.LeakyReLU()(x)
         while x.shape[1] < D:
-            y = x
+            # y = x
             x = tfkl.Conv1D(F,7,padding='causal')(x)
+            y = tfkl.Conv1D(1,1)(x)
+            outlayers.append(y)
+            print('outlayers:',outlayers[-1].shape)
             x = Norm()(x)
             x = tfkl.LeakyReLU()(x)
-            x = tfkl.Add()([x,y])
-            x = tfkl.UpSampling1D(4)(x)
+            # x = tfkl.Add()([x,y])
+            x = tfkl.UpSampling1D(2)(x)
         x = tfkl.Conv1D(F,5,padding='causal')(x)
+        y = tfkl.Conv1D(1,1)(x)
+        outlayers.append(y)
+        print('outlayers:',outlayers[-1].shape)
         x = Norm()(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Conv1D(1,5,padding='causal')(x)
         x = tfkl.Reshape((D,))(x)
         # x = tfkl.Activation('tanh')(x)
-        return tfk.Model([inp,e],x)
+        return tfk.Model([inp,e],[x]+outlayers, name='decoder'), outlayers
 
-    def encoder_network(self, bn=None,
+    def encoder_network(self, decinputs=None, bn=None,
                         stochastic=True, endit=True, extradim=False,
                         downsample=False):
         L = self.dataset.params['latent_dim']
@@ -90,29 +98,37 @@ class Model(object):
             inp = x = tfkl.Input(D)
             x = tfkl.Reshape((D,1))(x)
         x0 = x
-        if downsample:
-            x1 = tfkl.Lambda(updown.residual1d)(x0)
-            # x = tfkl.Concatenate()([x,x1])
-            x = x1
+        # if downsample:
+        #     x1 = tfkl.Lambda(updown.residual1d)(x0)
+        #     # x = tfkl.Concatenate()([x,x1])
+        #     x = x1
         x = tfkl.Conv1D(F,3,padding='same')(x)
         x = tfkl.LeakyReLU()(x)
+        j = 0
         while x.shape[1] > TL*0+CODE:
             y = x
+            if decinputs is not None:
+                print(x.shape, decinputs[j].shape)
+                x = tfkl.Concatenate()([x,decinputs[j]])
+                j += 1
             x = tfkl.Conv1D(F,7,padding='same')(x)
             x = Norm()(x)
             x = tfkl.LeakyReLU()(x)
             # x = tfkl.Add()([x,y])
             # x = tfkl.Conv1D(F,7,padding='same',strides=4)(x)
-            if downsample:
-                x = tfkl.AvgPool1D(2)(x)
-                x0 = tfkl.Lambda(updown.downsample1d)(x0)
-                #x0 = tfkl.Lambda(updown.downsample1d)(x0)
-                x1 = tfkl.Lambda(updown.residual1d)(x0)
-                x = tfkl.Concatenate()([x,x1])
-            else:
-                x = tfkl.AvgPool1D(4)(x)
-        if downsample:
-            x = tfkl.Concatenate()([x,x0])
+            # if downsample:
+            #     x = tfkl.AvgPool1D(2)(x)
+            #     x0 = tfkl.Lambda(updown.downsample1d)(x0)
+            #     #x0 = tfkl.Lambda(updown.downsample1d)(x0)
+            #     x1 = tfkl.Lambda(updown.residual1d)(x0)
+            #     x = tfkl.Concatenate()([x,x1])
+            # else:
+            x = tfkl.AvgPool1D(2)(x)
+        if decinputs is not None:
+            print(x.shape, decinputs[j].shape)
+            x = tfkl.Concatenate()([x,decinputs[j]])
+        # if downsample:
+        #     x = tfkl.Concatenate()([x,x0])
         x = Norm()(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Conv1D(1,3,padding='same')(x)
@@ -135,9 +151,11 @@ class Model(object):
         elif endit:
             x = tfkl.Dense(L)(x)
 
-        return tfk.Model(inp,x)
+        if decinputs is None:
+            decinputs = []
+        return tfk.Model([inp]+decinputs,x, name='encoder')
 
-    def critic_network(self):
+    def critic_network(self, decinputs=None):
         # TODO: critic batch/layer normalization
         # TODO: spectral normalization
         D = self.dataset.params['data_dim']
@@ -157,8 +175,13 @@ class Model(object):
             z = tfkl.Lambda(lambda y: tf.repeat(y, D, axis=1))(z)
             x = tfkl.Concatenate()([x,z])
             ed += L
-        x = self.encoder_network(bn=bn,stochastic=False,endit=False,extradim=ed,
-                                 downsample=True)(x)
+        E = self.encoder_network(decinputs=decinputs, bn=bn, stochastic=False,
+                                 endit=False, extradim=ed, downsample=True)
+        if decinputs is not None:
+            di = [tfk.layers.Input(d.shape[1:]) for d in decinputs]
+        else:
+            di = []
+        x = E([x]+di)
         if True and self.params['type'] != 'gan':
             x = tfkl.Concatenate()([x,z])
         x = tfkl.Dense(L)(x)
@@ -166,7 +189,7 @@ class Model(object):
         x = tfkl.Dense(L)(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Dense(1)(x)
-        return tfk.Model([inp,lat],x)
+        return tfk.Model([inp,lat] + di,x, name='critic')
 
 if __name__=='__main__':
     class Tester:

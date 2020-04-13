@@ -130,7 +130,7 @@ class Dataset(object):
         # time.  The rest stay static.
         self.x_input_viz[6:8] = next(self.x_input_gen2)
         z_output = encoder(self.x_input_viz)
-        x_output = decoder([self.z_input_viz,self.eps_input_viz])
+        x_output = decoder([self.z_input_viz,self.eps_input_viz])[0]
         np.save(f'{self.dirname}/x_output_{self.frame:06d}.npy', x_output)
         yl = np.array([np.minimum(np.min(self.x_input_viz),np.min(x_output)),
                         np.maximum(np.max(self.x_input_viz),np.max(x_output))])
@@ -148,7 +148,7 @@ class Dataset(object):
             p.set_ydata(self.x_input_viz[6+i])
         self.scat_z.set_offsets(z_output[:,:2])
 
-        x_output = decoder([z_output[:8],self.eps_input_viz])
+        x_output = decoder([z_output[:8],self.eps_input_viz])[0]
         for i,p in enumerate(self.plt_recon):
             p.set_ydata(x_output[i])
 

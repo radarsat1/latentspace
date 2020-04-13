@@ -86,9 +86,10 @@ model = get_model(model_params, ds)
 
 # Construct model and training ops
 
-decoder = model.decoder_network()
+decoder, decinputs = model.decoder_network()
 encoder = model.encoder_network()
-critic = model.critic_network()
+di = [tfk.layers.Input(d.shape[1:]) for d in decinputs[::-1]]
+critic = model.critic_network(di)
 
 from utils.gp import GradientPenalty
 
@@ -97,27 +98,36 @@ z = tfk.layers.Input(dataset_params['latent_dim'])
 eps = tfk.layers.Input(model_params['eps_dim'])
 p_x = tfk.layers.Input(dataset_params['data_dim'])
 
+from utils.updown import downsample1d
+x0 = tfk.layers.Reshape((dataset_params['data_dim'],1))(p_x)
+x1 = tfk.layers.Lambda(downsample1d)(x0)
+x2 = tfk.layers.Lambda(downsample1d)(x1)
+x3 = tfk.layers.Lambda(downsample1d)(x2)
+p_x_di = [x0,x1,x2,x3]
+crit = tfk.Model([p_x, z], critic([p_x,z]+p_x_di))
+
 p_z = tfk.Model(p_x, encoder(p_x))
-q_x = tfk.Model([z,eps], decoder([z,eps]))
+q_x = tfk.Model([z,eps], decoder([z,eps])[0])
+d = decoder([z,eps])
 
 # We train the data model to discriminate between the prior and
 # posterior distributions.
 data_model = tfk.Model([p_x, eps, z],
-                       [critic([p_x, p_z(p_x)]),        # prior
-                        critic([q_x([z,eps]), z]),      # posterior
-                        GradientPenalty(model_params, critic)(
+                       [crit([p_x, p_z(p_x)]),        # prior
+                        critic([d[0], z]+d[::-1][:-1]),      # posterior
+                        GradientPenalty(model_params, crit)(
                             [p_x, p_z(p_x)],
                             [q_x([z,eps]), z])])
 
 # We train the generator model to produce posterior distributions that
 # are hard to discriminate.
 if model_params['type']=='veegan':
-    gen_model = tfk.Model([p_x, eps, z], [critic([q_x([z,eps]), z]),
-                                          tf.reshape(p_z(q_x([z,eps])).log_prob(z),
+    gen_model = tfk.Model([p_x, eps, z], [critic([d[0], z]),
+                                          tf.reshape(p_z(d[0]).log_prob(z),
                                                      (-1,1))])
 elif model_params['type'] in ['bigan','gan']:
-    gen_model = tfk.Model([p_x, eps, z], [critic([q_x([z,eps]), z]),
-                                          critic([p_x, p_z(p_x)])])
+    gen_model = tfk.Model([p_x, eps, z], [critic([d[0], z]+d[::-1][:-1]),
+                                          crit([p_x, p_z(p_x)])])
 else:
     assert False and 'Unknown model type.'
 
