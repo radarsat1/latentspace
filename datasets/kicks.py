@@ -45,9 +45,10 @@ class Dataset(object):
         # y[:,:] = self.kicks[:batch_size,:L]
         # yield y
         while True:
-            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))
-            j = np.random.randint(0, 10, (batch_size,))
+            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))%4
+            j = np.random.randint(0, 10, (batch_size,))*0
             d = np.random.randint(0, 2, (batch_size,))*2-1
+            d = d*0+1
             for k in range(batch_size):
                 x = d[k]*self.kicks[i[k],j[k]:j[k]+L]
                 if x.shape[0] < L:

@@ -35,7 +35,7 @@ model_params = {
 # Training parameters
 training_params = {
     'batch_size': 100,
-    'epochs': 5000,
+    'epochs': 2000,
     'epoch_size': 100,
     'learning_rate': 1e-4,
     'learning_rate_target': 1e-4,
@@ -190,7 +190,7 @@ if training_params['critic_ratio'] > 1:
     variantfn += f'-{training_params["critic_ratio"]}:1'
     variant += f' {training_params["critic_ratio"]}:1'
 
-dirname = f'frames-{method}{dataset_params["data_dim"]}D-{variantfn}'
+dirname = f'frames-{method}{dataset_params["data_dim"]}D-{variantfn}-withDS'
 normgen = {'batch':'B','layer':'L'}.get(model_params['normalization']['gen'],'0')
 normcritic = {'batch':'B','layer':'L'}.get(model_params['normalization']['critic'],'0')
 norm = normgen+normcritic

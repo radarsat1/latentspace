@@ -97,19 +97,22 @@ class Model(object):
         x = tfkl.Conv1D(F,3,padding='same')(x)
         x = tfkl.LeakyReLU()(x)
         while x.shape[1] > TL*0+CODE:
-            if downsample:
-                x1 = tfkl.Lambda(updown.residual1d)(x0)
-                x = tfkl.Concatenate()([x,x1])
             y = x
             x = tfkl.Conv1D(F,7,padding='same')(x)
             x = Norm()(x)
             x = tfkl.LeakyReLU()(x)
             # x = tfkl.Add()([x,y])
             # x = tfkl.Conv1D(F,7,padding='same',strides=4)(x)
-            x = tfkl.AvgPool1D(4)(x)
             if downsample:
+                x = tfkl.AvgPool1D(2)(x)
                 x0 = tfkl.Lambda(updown.downsample1d)(x0)
-                x0 = tfkl.Lambda(updown.downsample1d)(x0)
+                #x0 = tfkl.Lambda(updown.downsample1d)(x0)
+                x1 = tfkl.Lambda(updown.residual1d)(x0)
+                x = tfkl.Concatenate()([x,x1])
+            else:
+                x = tfkl.AvgPool1D(4)(x)
+        if downsample:
+            x = tfkl.Concatenate()([x,x0])
         x = Norm()(x)
         x = tfkl.LeakyReLU()(x)
         x = tfkl.Conv1D(1,3,padding='same')(x)
@@ -155,7 +158,7 @@ class Model(object):
             x = tfkl.Concatenate()([x,z])
             ed += L
         x = self.encoder_network(bn=bn,stochastic=False,endit=False,extradim=ed,
-                                 downsample=False)(x)
+                                 downsample=True)(x)
         if True and self.params['type'] != 'gan':
             x = tfkl.Concatenate()([x,z])
         x = tfkl.Dense(L)(x)
