@@ -102,12 +102,13 @@ from utils.updown import downsample1d, upsample1d
 x0 = tfk.layers.Reshape((dataset_params['data_dim'],1))(p_x)
 p_x_di = []
 for i in range(len(di)):
+    p_x_di.append(x0)
     y = tfk.layers.Lambda(downsample1d)(x0)
-    y = tfk.layers.Lambda(downsample1d)(y)
-    x1 = tfk.layers.Lambda(upsample1d)(y)
-    x1 = tfk.layers.Lambda(upsample1d)(x1)
-    x1 = tfk.layers.Add()([x0,-x1])
-    p_x_di.append(x1)
+    # y = tfk.layers.Lambda(downsample1d)(y)
+    # x1 = tfk.layers.Lambda(upsample1d)(y)
+    # # x1 = tfk.layers.Lambda(upsample1d)(x1)
+    # x1 = tfk.layers.Add()([x0,-x1])
+    # p_x_di.append(x1)
     x0 = y
 crit = tfk.Model([p_x, z], critic([p_x,z]+p_x_di))
 
@@ -127,7 +128,7 @@ data_model = tfk.Model([p_x, eps, z],
 # We train the generator model to produce posterior distributions that
 # are hard to discriminate.
 if model_params['type']=='veegan':
-    gen_model = tfk.Model([p_x, eps, z], [critic([d[0], z]),
+    gen_model = tfk.Model([p_x, eps, z], [critic([d[0], z]+d[::-1][:-1]),
                                           tf.reshape(p_z(d[0]).log_prob(z),
                                                      (-1,1))])
 elif model_params['type'] in ['bigan','gan']:
@@ -196,7 +197,7 @@ eps_input_gen = eps_input_generator(training_params['batch_size'])
 
 method = {'veegan':'VEEGAN', 'bigan':'BiGAN', 'gan':'GAN'}\
          [model_params['type']]
-variant = {'none':'','sn':'SN','0gp':'0GP','1gp':'1GP'}[model_params['variant']]
+variant = {None:'','sn':'SN','0gp':'0GP','1gp':'1GP'}[model_params['variant']]
 variantfn = variant
 if 'GP' in variant:
     variantfn = variant+f'-{model_params["gp_weight"]:0.2g}'

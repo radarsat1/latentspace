@@ -8,7 +8,8 @@ import numpy as np
 class GradientPenalty(tfk.layers.Layer):
     def __init__(self, params, critic):
         self.variant = params['variant']
-        self.weight = [0.0,params['gp_weight']]['gp' in params['variant']]
+        self.weight = [0.0,params['gp_weight']][params['variant'] is not None
+                                                and 'gp' in params['variant']]
         self.critic = critic
         super(GradientPenalty, self).__init__()
     def call(self, x1, x2):

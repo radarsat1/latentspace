@@ -45,8 +45,8 @@ class Dataset(object):
         # y[:,:] = self.kicks[:batch_size,:L]
         # yield y
         while True:
-            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))
-            j = np.random.randint(0, 10, (batch_size,))
+            i = np.random.randint(0, self.kicks.shape[0], (batch_size,))%4
+            j = np.random.randint(0, 10, (batch_size,))*0
             d = np.random.randint(0, 2, (batch_size,))*2-1
             #d = d*0+1
             for k in range(batch_size):
@@ -154,7 +154,7 @@ class Dataset(object):
             p.set_ydata(self.x_input_viz[6+i])
         self.scat_z.set_offsets(z_output[:,:2])
 
-        x_output = decoder([z_output[:8],self.eps_input_viz])[0]
+        #x_output = decoder([z_output[:8],self.eps_input_viz])[0]
         for i,p in enumerate(self.plt_recon):
             p.set_ydata(x_output[i])
         for i,p in enumerate(self.plt_sample):
